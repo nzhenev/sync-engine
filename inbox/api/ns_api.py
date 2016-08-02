@@ -92,6 +92,12 @@ if config.get('DEBUG_PROFILING_ON'):
 
 @app.before_request
 def start():
+    if request.url_rule.rule.startswith('/v2/'):
+        g.api_version = 2
+    else:
+        # The standard Nylas API doesn't have a prefix.
+        g.api_version = 1
+
     engine = engine_manager.get_for_id(g.namespace_id)
     g.db_session = new_session(engine)
     g.namespace = Namespace.get(g.namespace_id, g.db_session)
@@ -300,7 +306,13 @@ def thread_api_update(public_id):
     data = request.get_json(force=True)
     if not isinstance(data, dict):
         raise InputError('Invalid request body')
-    update_thread(thread, data, g.db_session)
+
+    if g.api_version == 1:
+        update_thread(thread, data, g.db_session, optimistic=True)
+    else:
+        # API versions > 1 don't have optimistic updates.
+        update_thread(thread, data, g.db_session, optimistic=False)
+
     return g.encoder.jsonify(thread)
 
 
@@ -458,7 +470,13 @@ def message_update_api(public_id):
     data = request.get_json(force=True)
     if not isinstance(data, dict):
         raise InputError('Invalid request body')
-    update_message(message, data, g.db_session)
+
+    if g.api_version == 1:
+        update_message(message, data, g.db_session, optimistic=True)
+    else:
+        # API versions > 1 don't update optimistically
+        update_message(message, data, g.db_session, optimistic=False)
+
     return g.encoder.jsonify(message)
 
 
@@ -540,8 +558,8 @@ def folders_labels_create_api():
         # so it is okay to create a new category with the same (display_name,
         # name).
         # NOTE: We do not simply "undelete" the existing category, by setting
-        # its `deleted_at`=EPOCH, because doing so would be consistent with the
-        # API's semantics -- we want the newly created object to have a
+        # its `deleted_at`=EPOCH, because doing so would not be consistent with
+        # the API's semantics -- we want the newly created object to have a
         # different ID.
         category = Category.create(g.db_session, namespace_id=g.namespace.id,
                                    name=None, display_name=display_name,
@@ -582,15 +600,20 @@ def folder_label_update_api(public_id):
                        g.db_session)
 
     current_name = category.display_name
-    category.display_name = display_name
-    g.db_session.flush()
+
+    # Only v1 of the API supports optimistic updates.
+    if g.api_version == 1:
+        category.display_name = display_name
+        g.db_session.flush()
 
     if category_type == 'folder':
         schedule_action('update_folder', category, g.namespace.id,
-                        g.db_session, old_name=current_name)
+                        g.db_session, old_name=current_name,
+                        new_name=display_name)
     else:
         schedule_action('update_label', category, g.namespace.id,
-                        g.db_session, old_name=current_name)
+                        g.db_session, old_name=current_name,
+                        new_name=display_name)
 
     # TODO[k]: Update corresponding folder/ label once syncback is successful,
     # rather than waiting for sync to pick it up?
