@@ -601,8 +601,8 @@ def folder_label_update_api(public_id):
 
     current_name = category.display_name
 
-    # Only v1 of the API supports optimistic updates.
     if g.api_version == 1:
+        # Update optimistically.
         category.display_name = display_name
         g.db_session.flush()
 
@@ -614,9 +614,6 @@ def folder_label_update_api(public_id):
         schedule_action('update_label', category, g.namespace.id,
                         g.db_session, old_name=current_name,
                         new_name=display_name)
-
-    # TODO[k]: Update corresponding folder/ label once syncback is successful,
-    # rather than waiting for sync to pick it up?
 
     return g.encoder.jsonify(category)
 
@@ -648,20 +645,24 @@ def folder_label_delete_api(public_id):
                 "Folder {} cannot be deleted because it contains messages.".
                 format(public_id))
 
-        deleted_at = datetime.utcnow()
-        category.deleted_at = deleted_at
-        folders = category.folders if g.namespace.account.discriminator \
-            != 'easaccount' else category.easfolders
-        for folder in folders:
-            folder.deleted_at = deleted_at
+        if g.api_version == 1:
+            # Optimistically update folders.
+            deleted_at = datetime.utcnow()
+            category.deleted_at = deleted_at
+            folders = category.folders if g.namespace.account.discriminator \
+                != 'easaccount' else category.easfolders
+            for folder in folders:
+                folder.deleted_at = deleted_at
 
         schedule_action('delete_folder', category, g.namespace.id,
                         g.db_session)
     else:
-        deleted_at = datetime.utcnow()
-        category.deleted_at = deleted_at
-        for label in category.labels:
-            label.deleted_at = deleted_at
+        if g.api_version == 1:
+            # Optimistically update labels.
+            deleted_at = datetime.utcnow()
+            category.deleted_at = deleted_at
+            for label in category.labels:
+                label.deleted_at = deleted_at
 
         schedule_action('delete_label', category, g.namespace.id,
                         g.db_session)

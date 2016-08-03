@@ -120,20 +120,18 @@ def remote_create_folder(crispin_client, account_id, category_id):
             category.display_name = new_display_name
 
 
-def remote_update_folder(crispin_client, account_id, category_id, old_name):
-    with session_scope(account_id) as db_session:
-        account_provider = db_session.query(Account).get(account_id).provider
-        category = db_session.query(Category).get(category_id)
-        display_name = category.display_name
-
+def remote_update_folder(crispin_client, account_id, category_id, old_name,
+                         new_name):
     if account_provider not in ['gmail', 'eas']:
         new_display_name = imap_folder_path(
-            display_name, separator=crispin_client.folder_separator,
+            new_name, separator=crispin_client.folder_separator,
             prefix=crispin_client.folder_prefix)
     else:
-        new_display_name = display_name
+        new_display_name = new_name
     crispin_client.conn.rename_folder(old_name, new_display_name)
 
+    # TODO @karim: Make the main sync loop detect folder renames
+    # more accurately, and get rid of this.
     if new_display_name != display_name:
         with session_scope(account_id) as db_session:
             category = db_session.query(Category).get(category_id)
@@ -159,6 +157,8 @@ def remote_delete_folder(crispin_client, account_id, category_id):
         # no-op.
         pass
 
+    # TODO @karim: Make the main sync loop detect folder renames
+    # more accurately, and get rid of this.
     with session_scope(account_id) as db_session:
         category = db_session.query(Category).get(category_id)
         db_session.delete(category)
