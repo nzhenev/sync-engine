@@ -39,6 +39,14 @@ def update_event(account_id, event_id, extra_args):
         account = db_session.query(Account).get(account_id)
         event = db_session.query(Event).get(event_id)
 
+        # Update the event before sending it.
+        if 'event_data' in extra_args:
+            for attr in Event.API_MODIFIABLE_FIELDS:
+                if attr in extra_args['event_data']:
+                    setattr(event, attr, data[attr])
+
+            event.sequence_number += 1
+
         # It doesn't make sense to update or delete an event we imported from
         # an iCalendar file.
         if event.calendar == account.emailed_events_calendar:

@@ -887,26 +887,43 @@ def event_update_api(public_id):
         # We're going to save this data into a JSON-like TEXT field in the
         # db. With MySQL, this means that the column will be 64k.
         # Drop the latest participants until it fits in the column.
-        while len(json.dumps(cancelled_participants)) > 63000:
+        while len(json.dumps(cancelled_participants)) > 2**15:
             cancelled_participants.pop()
 
     # Don't update an event if we don't need to.
     if noop_event_update(event, data):
         return g.encoder.jsonify(event)
 
-    for attr in Event.API_MODIFIABLE_FIELDS:
-        if attr in data:
-            setattr(event, attr, data[attr])
+    if g.api_version == 1:
+        # Optimistic update!
+        for attr in Event.API_MODIFIABLE_FIELDS:
+            if attr in data:
+                setattr(event, attr, data[attr])
 
-    event.sequence_number += 1
-    g.db_session.commit()
+        event.sequence_number += 1
+        g.db_session.commit()
 
-    # Don't sync back updates to autoimported events.
-    if event.calendar != account.emailed_events_calendar:
-        schedule_action('update_event', event, g.namespace.id, g.db_session,
-                        calendar_uid=event.calendar.uid,
-                        cancelled_participants=cancelled_participants,
-                        notify_participants=notify_participants)
+        # Don't sync back updates to autoimported events.
+        # FIXME @karim: document this and forbid it.
+        if event.calendar != account.emailed_events_calendar:
+            schedule_action('update_event', event, g.namespace.id, g.db_session,
+                            calendar_uid=event.calendar.uid,
+                            cancelled_participants=cancelled_participants,
+                            notify_participants=notify_participants)
+    else:
+        # This isn't an optimistic update, so we need to store the
+        # updated attributes inside the ActionLog entry.
+        kwargs = dict(calendar_uid=event.calendar.uid,
+                      event=data,
+                      cancelled_participants=cancelled_participants,
+                      notify_participants=notify_participants)
+
+        if len(json.dumps(kwargs)) > 2**16 - 12:
+            raise InputError('Event update too big --- please break it in parts.')
+
+        if event.calendar != account.emailed_events_calendar:
+            schedule_action('update_event', event, g.namespace.id, g.db_session,
+                            **kwargs)
 
     return g.encoder.jsonify(event)
 
