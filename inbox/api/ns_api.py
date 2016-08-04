@@ -914,7 +914,7 @@ def event_update_api(public_id):
         # This isn't an optimistic update, so we need to store the
         # updated attributes inside the ActionLog entry.
         kwargs = dict(calendar_uid=event.calendar.uid,
-                      event=data,
+                      event_data=data,
                       cancelled_participants=cancelled_participants,
                       notify_participants=notify_participants)
 
@@ -946,21 +946,14 @@ def event_delete_api(public_id):
         raise InputError('Cannot delete event {} from read_only calendar.'.
                          format(public_id))
 
-    # Set the local event status to 'cancelled' rather than deleting it,
-    # in order to be consistent with how we sync deleted events from the
-    # remote, and consequently return them through the events, delta sync APIs
-    event.sequence_number += 1
-    event.status = 'cancelled'
-    g.db_session.commit()
 
-    account = g.namespace.account
-
-    # FIXME @karim: do this in the syncback thread instead.
-    if notify_participants and account.provider != 'gmail':
-        ical_file = generate_icalendar_invite(event,
-                                              invite_type='cancel').to_ical()
-
-        send_invite(ical_file, event, account, invite_type='cancel')
+    if g.api_version == 1:
+        # Set the local event status to 'cancelled' rather than deleting it,
+        # in order to be consistent with how we sync deleted events from the
+        # remote, and consequently return them through the events, delta sync APIs
+        event.sequence_number += 1
+        event.status = 'cancelled'
+        g.db_session.commit()
 
     schedule_action('delete_event', event, g.namespace.id, g.db_session,
                     event_uid=event.uid, calendar_name=event.calendar.name,
