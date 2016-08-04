@@ -92,11 +92,7 @@ if config.get('DEBUG_PROFILING_ON'):
 
 @app.before_request
 def start():
-    if request.url_rule.rule.startswith('/v2/'):
-        g.api_version = 2
-    else:
-        # The standard Nylas API doesn't have a prefix.
-        g.api_version = 1
+    g.api_version = int(request.headers.get('X-Api-Version', 1))
 
     engine = engine_manager.get_for_id(g.namespace_id)
     g.db_session = new_session(engine)
