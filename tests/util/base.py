@@ -412,6 +412,13 @@ def label(db, default_account):
 
 
 @fixture
+def custom_label(db, default_account):
+    from inbox.models import Label
+    return Label.find_or_create(db.session, default_account,
+                                'Kraftwerk', '')
+
+
+@fixture
 def contact(db, default_account):
     return add_fake_contact(db.session, default_account.namespace.id)
 

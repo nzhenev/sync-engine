@@ -75,9 +75,14 @@ def test_rfc822_format(stub_message_from_raw, api_client, mime_message):
     assert resp.data == get_from_blockstore(stub_message_from_raw.data_sha256)
 
 
-def test_sender_and_participants(stub_message, api_client):
+@pytest.mark.parametrize("api_version", [1, 2])
+def test_sender_and_participants(stub_message, api_client, api_version):
+    headers = dict()
+    headers['X-Api-Version'] = api_version
+
     resp = api_client.get_raw('/threads/{}'
-                              .format(stub_message.thread.public_id))
+                              .format(stub_message.thread.public_id),
+                              headers=headers)
     assert resp.status_code == 200
     resp_dict = json.loads(resp.data)
     participants = resp_dict['participants']
@@ -88,7 +93,8 @@ def test_sender_and_participants(stub_message, api_client):
     assert 'drafts' not in resp_dict
 
 
-def test_expanded_threads(stub_message, api_client):
+@pytest.mark.parametrize("api_version", [1, 2])
+def test_expanded_threads(stub_message, api_client, api_version):
     def _check_json_thread(resp_dict):
         assert 'message_ids' not in resp_dict
         assert 'messages' in resp_dict
@@ -113,16 +119,21 @@ def test_expanded_threads(stub_message, api_client):
                           'snippet', 'date', 'version', 'reply_to_message_id']
             assert all(x in draft for x in valid_keys)
 
+    headers = dict()
+    headers['X-Api-Version'] = api_version
+
     # /threads/<thread_id>
     resp = api_client.get_raw(
-        '/threads/{}?view=expanded'.format(stub_message.thread.public_id))
+        '/threads/{}?view=expanded'.format(stub_message.thread.public_id),
+        headers=headers)
     assert resp.status_code == 200
     resp_dict = json.loads(resp.data)
     _check_json_thread(resp_dict)
 
     # /threads/
     resp = api_client.get_raw(
-        '/threads/?view=expanded'.format(stub_message.thread.public_id))
+        '/threads/?view=expanded'.format(stub_message.thread.public_id),
+        headers=headers)
     assert resp.status_code == 200
     resp_dict = json.loads(resp.data)
 
@@ -210,3 +221,38 @@ def test_message_labels(db, gmail_account):
     assert resp_data['id'] == gmail_message.public_id
     assert resp_data['object'] == 'message'
     assert 'labels' in resp_data and 'folders' not in resp_data
+
+
+@pytest.mark.parametrize("api_version", [1, 2])
+def test_message_label_updates(db, api_client, default_account, api_version,
+                               custom_label):
+    """Check that you can update a message (optimistically or not),
+    and that the update is queued in the ActionLog."""
+
+    headers = dict()
+    headers['X-Api-Version'] = api_version
+
+    # Gmail threads, messages have a 'labels' field
+    gmail_thread = add_fake_thread(db.session, default_account.namespace.id)
+    gmail_message = add_fake_message(db.session,
+                                     default_account.namespace.id, gmail_thread)
+
+    resp_data = api_client.get_data(
+        '/messages/{}'.format(gmail_message.public_id), headers=headers)
+
+    assert resp_data['labels'] == []
+
+    category = custom_label.category
+    update = dict(labels=[category.public_id])
+
+    resp = api_client.put_data(
+        '/messages/{}'.format(gmail_message.public_id), update,
+                              headers=headers)
+
+    resp_data = json.loads(resp.data)
+
+    if api_version == 1:
+        assert len(resp_data['labels']) == 1
+        assert resp_data['labels'][0]['id'] == category.public_id
+    else:
+        assert resp_data['labels'] == []

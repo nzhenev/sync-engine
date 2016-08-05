@@ -105,5 +105,44 @@ def test_thread_count(db, api_client, default_account):
     threads = json.loads(resp.data)
     assert threads['count'] == 2
 
-if __name__ == '__main__':
-    pytest.main([__file__])
+
+@pytest.mark.parametrize("api_version", [1, 2])
+def test_thread_label_updates(db, api_client, default_account, api_version,
+                              custom_label):
+    """Check that you can update a message (optimistically or not),
+    and that the update is queued in the ActionLog."""
+
+    headers = dict()
+    headers['X-Api-Version'] = api_version
+
+    # Gmail threads, messages have a 'labels' field
+    gmail_thread = add_fake_thread(db.session, default_account.namespace.id)
+    gmail_message = add_fake_message(db.session,
+                                     default_account.namespace.id, gmail_thread)
+
+    resp_data = api_client.get_data(
+        '/threads/{}'.format(gmail_thread.public_id), headers=headers)
+
+    assert resp_data['labels'] == []
+
+    category = custom_label.category
+    update = dict(labels=[category.public_id])
+
+    resp = api_client.put_data(
+        '/threads/{}'.format(gmail_thread.public_id), update,
+                              headers=headers)
+
+    resp_data = json.loads(resp.data)
+
+    if api_version == 1:
+        assert len(resp_data['labels']) == 1
+        assert resp_data['labels'][0]['id'] == category.public_id
+
+        # Also check that the label got added to the message.
+        resp_data = api_client.get_data(
+            '/messages/{}'.format(gmail_message.public_id), headers=headers)
+
+        assert len(resp_data['labels']) == 1
+        assert resp_data['labels'][0]['id'] == category.public_id
+    else:
+        assert resp_data['labels'] == []
