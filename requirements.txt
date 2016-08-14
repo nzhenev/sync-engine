@@ -1,3 +1,4 @@
+six>=1.7
 nylas-production-python>=0.2.9
 coverage==3.7.1
 httplib2==0.8
@@ -20,7 +21,8 @@ urllib3[secure]>=1.16
 chardet==2.1.1
 setproctitle==1.1.8
 gdata==2.0.18
-git+https://github.com/nylas/dateutil.git@da336a366cd3#egg=python-dateutil
+# git+https://github.com/nylas/dateutil.git@da336a366cd3#egg=python-dateutil
+git+https://github.com/nylas/dateutil.git@master#egg=python-dateutil
 git+https://github.com/khamidou/flanker.git@fix_chinese_subjects#egg=flanker
 alembic==0.6.5
 iconv==1.0
@@ -60,5 +62,6 @@ psutil==3.3.0
 pyopenssl>=0.15.1
 gevent_openssl==1.2
 backports.ssl==0.0.9
-git+https://github.com/nylas/imapclient.git@5ae2b9283aba024ed4b4dc3f826515e01ae2380b#egg=imapclient
+git+https://github.com/nylas/imapclient.git@master#egg=imapclient
+# git+https://github.com/nylas/imapclient.git@5ae2b9283aba024ed4b4dc3f826515e01ae2380b#egg=imapclient
 tldextract==1.7.5
