@@ -104,6 +104,7 @@ apt-get -y install git \
 src_dir=$(pwd)
 temp_dir=`mktemp -d`
 cd "$temp_dir"
+pip install six
 
 # Workaround for "error: sodium.h: No such file or directory" bug
 # https://github.com/pyca/pynacl/issues/79
