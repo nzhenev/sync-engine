@@ -17,8 +17,9 @@ def _absolute_path(relative_path):
 
 
 def check_sudo():
-    if os.getuid() == 0:
-        raise Exception("Don't run the Nylas Sync Engine as root!")
+    # if os.getuid() == 0:
+    #     raise Exception("Don't run the Nylas Sync Engine as root!")
+    pass
 
 
 # TODO(menno) - It's good to have all servers use UTC for general
